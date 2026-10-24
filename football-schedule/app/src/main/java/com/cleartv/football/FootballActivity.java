@@ -10,7 +10,6 @@ import android.util.Xml;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
-import android.widget.TextView;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
