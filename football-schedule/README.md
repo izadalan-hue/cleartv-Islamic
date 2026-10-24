@@ -1,13 +1,15 @@
-# ClearTV EPL Fixtures (Android TV)
+# ClearTV EPL Fixtures + Astro AWANI News (Android TV)
 
-A small companion app for the ClearTV launcher that shows upcoming English Premier League fixtures in **Malaysia Time (MYT, UTC+8)**. It declares a ClearTV module card labelled **EPL Fixtures**.
+A small companion app for the ClearTV launcher that shows upcoming English Premier League fixtures in **Malaysia Time (MYT, UTC+8)** and a continuously scrolling Astro AWANI news ticker along the bottom. It declares a ClearTV module card labelled **EPL Fixtures**.
 
 ## Features
 
 - Fetches the next 14 days of English Premier League fixtures from ESPN's public scoreboard endpoint.
 - Converts kickoff times to the `Asia/Kuala_Lumpur` time zone.
 - Displays match status and scores when ESPN provides them.
-- Manual **Refresh** button and remote-control navigation.
+- Scrolls recent Astro AWANI Bahasa Malaysia headlines across the bottom of the screen.
+- Press OK on the news bar to open the latest available headline in the TV's web browser.
+- **Refresh** reloads fixtures and news; the ticker also loads automatically when the app opens.
 - No account, API key, ads, analytics, streaming, or background service.
 
 ## Build
@@ -30,12 +32,15 @@ The first time the ClearTV launcher discovers the card, it asks whether to show 
 
 ## Data and privacy
 
-The app requests the Android `INTERNET` permission only to retrieve fixture data from:
+The app requests the Android `INTERNET` permission to retrieve:
 
-`https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard`
+- Fixtures from ESPN's public scoreboard endpoint: `https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard`
+- Astro AWANI's official RSS feed: `https://www.astroawani.com/rss/latest/public`
 
-It sends no personal data. Fixture availability and accuracy depend on the upstream data provider and network access. Kickoff times are displayed in Malaysia time; TV broadcast times may differ. The app does not stream or link to match broadcasts.
+Astro AWANI says its RSS headlines are offered free for personal, non-commercial use. The ticker displays headline text and attributes it to Astro AWANI; selecting the bar opens the first headline's original article when a link is available. News availability depends on the publisher feed and the TV's network connection. See [Astro AWANI RSS terms and available feeds](https://www.astroawani.com/rss).
+
+The app sends no personal data. It does not stream video or run a background service.
 
 ## Limitations
 
-This is a standalone companion app and does not modify the ClearTV launcher itself. Fixtures are loaded when the app opens or when Refresh is selected; there is no automatic background refresh.
+This is a standalone companion app and does not modify the ClearTV launcher itself. Fixtures and headlines are fetched when the app opens or when Refresh is selected; there is no automatic background refresh. If the RSS feed is temporarily unavailable, the app shows a fallback message.
