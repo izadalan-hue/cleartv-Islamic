@@ -1,9 +1,12 @@
 package com.cleartv.football;
 
 import android.app.Activity;
+import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.net.Uri;
 import android.os.Bundle;
+import android.util.Xml;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
@@ -14,9 +17,11 @@ import android.widget.TextView;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
+import org.xmlpull.v1.XmlPullParser;
 
 import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
@@ -32,11 +37,14 @@ import java.util.Locale;
 public class FootballActivity extends Activity {
     private static final String API =
         "https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard";
+    private static final String AWANI_RSS = "https://www.astroawani.com/rss/latest/public";
     private static final ZoneId MYT = ZoneId.of("Asia/Kuala_Lumpur");
     private final List<JSONObject> fixtures = new ArrayList<>();
     private LinearLayout list;
     private TextView status;
     private Button refresh;
+    private TextView tickerText;
+    private String latestNewsUrl = "https://www.astroawani.com/";
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -66,7 +74,7 @@ public class FootballActivity extends Activity {
         refresh = new Button(this);
         refresh.setText("Refresh");
         refresh.setTextSize(15);
-        refresh.setOnClickListener(v -> loadFixtures());
+        refresh.setOnClickListener(v -> refreshAll());
         controls.addView(refresh);
         LinearLayout.LayoutParams controlParams = new LinearLayout.LayoutParams(-1, -2);
         controlParams.topMargin = dp(8);
@@ -79,9 +87,39 @@ public class FootballActivity extends Activity {
         scroll.setFillViewport(false);
         scroll.addView(list);
         root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+        LinearLayout newsBar = new LinearLayout(this);
+        newsBar.setOrientation(LinearLayout.HORIZONTAL);
+        newsBar.setGravity(Gravity.CENTER_VERTICAL);
+        newsBar.setPadding(dp(12), dp(9), dp(12), dp(9));
+        newsBar.setBackgroundColor(Color.rgb(160, 29, 39));
+        TextView newsLabel = text("ASTRO AWANI", 14, Color.WHITE, true);
+        newsBar.addView(newsLabel);
+        tickerText = text("  •  Loading latest headlines…", 16, Color.WHITE, true);
+        tickerText.setSingleLine(true);
+        tickerText.setSelected(true);
+        tickerText.setFocusable(false);
+        tickerText.setEllipsize(android.text.TextUtils.TruncateAt.MARQUEE);
+        tickerText.setMarqueeRepeatLimit(-1);
+        tickerText.setHorizontallyScrolling(true);
+        LinearLayout.LayoutParams tickerParams = new LinearLayout.LayoutParams(0, -2, 1);
+        tickerParams.leftMargin = dp(12);
+        newsBar.addView(tickerText, tickerParams);
+        newsBar.setFocusable(true);
+        newsBar.setContentDescription("Astro Awani scrolling news headlines. Press OK to open the latest story.");
+        newsBar.setOnClickListener(v -> {
+            try {
+                startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(latestNewsUrl)));
+            } catch (Exception ignored) {
+                startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://www.astroawani.com/")));
+            }
+        });
+        LinearLayout.LayoutParams newsParams = new LinearLayout.LayoutParams(-1, -2);
+        newsParams.topMargin = dp(10);
+        root.addView(newsBar, newsParams);
+
         setContentView(root);
         refresh.requestFocus();
-        loadFixtures();
+        refreshAll();
     }
 
     private void loadFixtures() {
@@ -127,6 +165,73 @@ public class FootballActivity extends Activity {
                 runOnUiThread(() -> showFixtures(new ArrayList<>(),
                     "Could not load fixtures. Check the TV's internet connection and try Refresh."));
             }
+        }).start();
+    }
+
+    private void refreshAll() {
+        loadFixtures();
+        loadAwaniNews();
+    }
+
+    private void loadAwaniNews() {
+        new Thread(() -> {
+            List<String> headlines = new ArrayList<>();
+            String firstUrl = "https://www.astroawani.com/";
+            HttpURLConnection connection = null;
+            try {
+                connection = (HttpURLConnection) new URL(AWANI_RSS).openConnection();
+                connection.setRequestMethod("GET");
+                connection.setConnectTimeout(12000);
+                connection.setReadTimeout(12000);
+                connection.setRequestProperty("Accept", "application/rss+xml, application/xml, text/xml");
+                connection.setRequestProperty("User-Agent", "ClearTV-Awani-Ticker/1.0");
+                int code = connection.getResponseCode();
+                if (code < 200 || code >= 300) throw new IllegalStateException("RSS HTTP " + code);
+                try (InputStream input = new BufferedInputStream(connection.getInputStream())) {
+                    XmlPullParser parser = Xml.newPullParser();
+                    parser.setInput(input, "UTF-8");
+                    boolean insideItem = false;
+                    String currentTag = "";
+                    String itemTitle = "";
+                    String itemLink = "";
+                    int eventType = parser.getEventType();
+                    while (eventType != XmlPullParser.END_DOCUMENT && headlines.size() < 15) {
+                        if (eventType == XmlPullParser.START_TAG) {
+                            currentTag = parser.getName();
+                            if ("item".equalsIgnoreCase(currentTag)) {
+                                insideItem = true;
+                                itemTitle = "";
+                                itemLink = "";
+                            }
+                        } else if (eventType == XmlPullParser.TEXT && insideItem) {
+                            if ("title".equalsIgnoreCase(currentTag)) itemTitle = parser.getText().trim();
+                            else if ("link".equalsIgnoreCase(currentTag)) itemLink = parser.getText().trim();
+                        } else if (eventType == XmlPullParser.END_TAG) {
+                            String tag = parser.getName();
+                            if ("item".equalsIgnoreCase(tag) && insideItem) {
+                                if (!itemTitle.isEmpty()) headlines.add(itemTitle.replaceAll("\\s+", " "));
+                                if (headlines.size() == 1 && itemLink.startsWith("https://")) firstUrl = itemLink;
+                                insideItem = false;
+                            }
+                            currentTag = "";
+                        }
+                        eventType = parser.next();
+                    }
+                }
+            } catch (Exception ignored) {
+                // Keep the ticker useful even when the feed is temporarily unavailable.
+            } finally {
+                if (connection != null) connection.disconnect();
+            }
+            final String openUrl = firstUrl;
+            final String ticker = headlines.isEmpty()
+                ? "  •  Latest headlines unavailable. Visit astroawani.com"
+                : "  •  " + String.join("     •     ", headlines) + "     •     ";
+            runOnUiThread(() -> {
+                latestNewsUrl = openUrl;
+                tickerText.setText(ticker);
+                tickerText.setSelected(true);
+            });
         }).start();
     }
 
